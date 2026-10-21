@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'" />
+    <title>Glass Convert</title>
+    <link rel="stylesheet" href="overlay.css" />
+  </head>
+  <body>
+    <div class="stage" id="stage">
+      <div class="aura"></div>
+
+      <div class="lens">
+        <img class="backdrop" id="backdrop" alt="" draggable="false" />
+        <span class="blob b1"></span>
+        <span class="blob b2"></span>
+        <span class="blob b3"></span>
+        <span class="blob b4"></span>
+        <span class="lens-tint"></span>
+        <span class="lens-sheen"></span>
+      </div>
+
+      <div class="ring"></div>
+      <div class="ring-glow"></div>
+
+      <div class="items" id="items"></div>
+
+      <div class="core" id="core">
+        <span class="core-icon" id="coreIcon"></span>
+        <span class="core-kicker" id="coreKicker">Shift + drag</span>
+        <span class="core-title" id="coreTitle">Форматы</span>
+        <span class="core-sub" id="coreSub">отпустите файл</span>
+      </div>
+
+      <div class="caption" id="caption">
+        <span class="dot"></span>
+        <span id="captionText">Отпустите файл на нужный формат</span>
+      </div>
+    </div>
+
+    <script src="overlay.js"></script>
+  </body>
+</html>

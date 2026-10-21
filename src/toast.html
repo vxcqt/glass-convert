@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'" />
+    <title>Glass Convert</title>
+    <link rel="stylesheet" href="toast.css" />
+  </head>
+  <body>
+    <div class="card" id="card">
+      <div class="blob"></div>
+      <div class="card-glass"></div>
+
+      <div class="state" id="state"></div>
+
+      <div class="body">
+        <div class="line">
+          <span class="title" id="title">Конвертация</span>
+          <span class="badge" id="badge">MP3</span>
+        </div>
+        <div class="subtitle" id="subtitle">файл.mp4</div>
+        <div class="bar" id="bar"><i id="fill"></i></div>
+        <div class="hint" id="hint">нажмите, чтобы открыть папку</div>
+      </div>
+
+      <button class="close" id="close" title="Закрыть">
+        <svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" /></svg>
+      </button>
+    </div>
+    <script src="toast.js"></script>
+  </body>
+</html>
