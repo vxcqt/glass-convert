@@ -2,20 +2,59 @@
   "name": "glass-convert",
   "productName": "Glass Convert",
   "version": "1.0.0",
-  "description": "Фоновый конвертер файлов: Shift + перетаскивание открывает liquid glass радиальное меню",
+  "description": "Фоновый конвертер файлов для Windows: Shift + перетаскивание открывает liquid glass радиальное меню",
   "main": "main.js",
-  "author": "Glass Convert",
+  "author": "vxcqt",
   "license": "MIT",
+  "homepage": "https://github.com/vxcqt/glass-convert#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vxcqt/glass-convert.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vxcqt/glass-convert/issues"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "preview": "electron scripts/preview.js"
+    "preview": "electron scripts/preview.js",
+    "build": "electron-builder --win portable",
+    "build:dir": "electron-builder --win --dir"
   },
   "dependencies": {
     "ffmpeg-static": "^5.3.0",
     "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
-    "electron": "^45.0.0"
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.vxcqt.glassconvert",
+    "productName": "Glass Convert",
+    "asar": true,
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**",
+      "node_modules/uiohook-napi/**"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "portable": {
+      "artifactName": "GlassConvert-${version}-portable.${ext}"
+    }
   }
 }

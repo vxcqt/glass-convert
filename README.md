@@ -1,16 +1,22 @@
 # Glass Convert
 
+[![build](https://github.com/vxcqt/glass-convert/actions/workflows/build.yml/badge.svg)](https://github.com/vxcqt/glass-convert/actions/workflows/build.yml)
+
 Фоновое приложение для Windows: зажмите **Shift** во время перетаскивания файла — рядом с курсором раскроется радиальное меню в стиле **liquid glass**. Отпустите файл на нужный формат, и готовая копия появится рядом с исходником.
 
-```
-┌───────────────────────────────────────────────┐
-│   MP3      M4A      WAV                       │
-│        ╭─────────────╮                        │
-│   GIF  │ Shift + drag │  MP4                   │
-│        ╰─────────────╯                        │
-│   WEBM     PNG      ...                       │
-└───────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="docs/overlay.png" width="440" alt="Радиальное меню Glass Convert" />
+  <br />
+  <img src="docs/toast.png" width="400" alt="Тост с результатом конвертации" />
+</p>
+
+## Скачать
+
+Готовый **portable .exe** для Windows 10/11 x64 лежит в [Releases](https://github.com/vxcqt/glass-convert/releases/latest):
+
+**`GlassConvert-1.0.0-portable.exe`** — просто запустите, установка не нужна. Приложение свернётся в системный трей.
+
+> Файл пока не подписан цифровой подписью, поэтому SmartScreen может предупредить. Нажмите «Подробнее» → «Выполнить в любом случае».
 
 ## Что умеет
 
@@ -30,17 +36,6 @@
 | Аудио (wav, flac, ogg, m4a, aac, opus, wma…) | MP3, WAV, FLAC, OGG, M4A |
 | Видео (mp4, mkv, mov, avi, webm, wmv…) | MP3, M4A, MP4, WebM, GIF, WAV |
 | Изображения (png, jpg, webp, bmp, tiff, heic…) | PNG, JPG, WEBP, GIF, BMP |
-
-## Запуск
-
-Нужен [Node.js](https://nodejs.org) 18+.
-
-```bash
-npm install
-npm start
-```
-
-При первом запуске скачивается Electron, дальше — мгновенно. Приложение не показывает главное окно: ищите иконку в системном трее.
 
 ## Как пользоваться
 
@@ -81,14 +76,24 @@ npm start
 
 Менять можно и через меню в трее.
 
-## Сборка portable .exe (по желанию)
+## Сборка
+
+Нужен [Node.js](https://nodejs.org) 18+.
 
 ```bash
-npm i -D electron-builder
-npx electron-builder --win portable
+npm install
+npm run build
 ```
 
-Готовый файл появится в `dist/`.
+Готовый portable .exe появится в `dist/`. CI собирает его же на GitHub Actions (`.github/workflows/build.yml`) и складывает в артефакты.
+
+Для разработки:
+
+```bash
+npm start
+```
+
+Приложение не показывает главное окно: ищите иконку в системном трее. При первом запуске скачивается Electron, дальше — мгновенно.
 
 ## Превью интерфейса
 
@@ -105,3 +110,7 @@ node scripts/test-convert.js
 ```
 
 Скрипт генерирует тестовые файлы и прогоняет все основные форматы.
+
+## Лицензия
+
+[MIT](LICENSE)
