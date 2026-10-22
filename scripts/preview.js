@@ -5,13 +5,21 @@
  * Запуск: npm run preview
  */
 
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'preview');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const previewSettings = { enabled: true, autoLaunch: false, trigger: 'shift', theme: 'liquid' };
+ipcMain.handle('settings:get', () => ({ ...previewSettings }));
+ipcMain.handle('settings:update', (_event, patch) => {
+  Object.assign(previewSettings, patch && typeof patch === 'object' ? patch : {});
+  return { ...previewSettings };
+});
+ipcMain.on('settings:close', () => {});
 
 const common = {
   preload: path.join(ROOT, 'src', 'preload.js'),
@@ -44,7 +52,7 @@ async function setWallpaper(win) {
   );
 }
 
-async function shotOverlay() {
+async function shotOverlay({ name = 'overlay.png', theme = 'liquid', trigger = 'shift', category = '', ext = '', hot = 2 } = {}) {
   const win = new BrowserWindow({
     width: 600,
     height: 600,
@@ -54,31 +62,34 @@ async function shotOverlay() {
     show: true,
     webPreferences: common,
   });
-  await win.loadFile(path.join(ROOT, 'src', 'overlay.html'), { query: { preview: '1', hot: '2' } });
-  wireLogs(win, 'overlay');
+  const query = { preview: '1', theme, trigger };
+  if (hot >= 0) query.hot = String(hot);
+  if (category) query.category = category;
+  if (ext) query.ext = ext;
+  await win.loadFile(path.join(ROOT, 'src', 'overlay.html'), { query });
+  wireLogs(win, name);
   await setWallpaper(win);
   await wait(2500);
   const image = await win.webContents.capturePage();
-  fs.writeFileSync(path.join(OUT, 'overlay.png'), image.toPNG());
+  fs.writeFileSync(path.join(OUT, name), image.toPNG());
   win.destroy();
 }
 
-async function shotOverlayIdle() {
+async function shotSettings() {
   const win = new BrowserWindow({
-    width: 600,
-    height: 600,
+    width: 780,
+    height: 700,
     frame: false,
     transparent: false,
-    backgroundColor: '#080b16',
+    backgroundColor: '#0b0e17',
     show: true,
     webPreferences: common,
   });
-  await win.loadFile(path.join(ROOT, 'src', 'overlay.html'), { query: { preview: '1' } });
-  wireLogs(win, 'overlay-idle');
-  await setWallpaper(win);
-  await wait(2500);
+  await win.loadFile(path.join(ROOT, 'src', 'settings.html'));
+  wireLogs(win, 'settings');
+  await wait(1200);
   const image = await win.webContents.capturePage();
-  fs.writeFileSync(path.join(OUT, 'overlay-idle.png'), image.toPNG());
+  fs.writeFileSync(path.join(OUT, 'settings.png'), image.toPNG());
   win.destroy();
 }
 
@@ -118,8 +129,13 @@ async function shotToast() {
 app.whenReady().then(async () => {
   fs.mkdirSync(OUT, { recursive: true });
   try {
-    await shotOverlayIdle();
-    await shotOverlay();
+    await shotOverlay({ name: 'overlay-idle.png', hot: -1 });
+    await shotOverlay({ name: 'overlay.png', hot: 2 });
+    await shotOverlay({ name: 'overlay-modern.png', theme: 'modern', hot: 1 });
+    await shotOverlay({ name: 'overlay-futuristic.png', theme: 'futuristic', hot: 1 });
+    await shotOverlay({ name: 'overlay-kids.png', theme: 'kids', hot: 1 });
+    await shotOverlay({ name: 'overlay-doc.png', category: 'document', ext: 'pdf', hot: -1 });
+    await shotSettings();
     await shotToast();
     console.log('preview saved to', OUT);
   } catch (err) {

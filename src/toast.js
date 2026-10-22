@@ -48,7 +48,7 @@ function render(payload) {
     } else {
       bar.classList.add('indeterminate');
       fill.style.width = '';
-      badgeEl.textContent = 'FFMPEG';
+      badgeEl.textContent = payload.engine || 'FFMPEG';
     }
   } else if (status === 'done') {
     bar.classList.add('visible');

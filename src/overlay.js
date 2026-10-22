@@ -17,6 +17,9 @@ const ICON_PATHS = {
   camera: '<path d="M4.2 8h3l1.4-2h6.8L16.8 8h3a1.2 1.2 0 0 1 1.2 1.2v8.6A1.2 1.2 0 0 1 19.8 19H4.2A1.2 1.2 0 0 1 3 17.8V9.2A1.2 1.2 0 0 1 4.2 8z"/><circle cx="12" cy="13.2" r="3.3"/>',
   spark: '<path d="M11.5 3.5 13 8.6l5.1 1.5-5.1 1.5-1.5 5.1-1.5-5.1L4.9 10l5.1-1.4z"/><path d="m18 15.3.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',
   grid: '<rect x="3.4" y="3.4" width="7" height="7" rx="1.6"/><rect x="13.6" y="3.4" width="7" height="7" rx="1.6"/><rect x="3.4" y="13.6" width="7" height="7" rx="1.6"/><rect x="13.6" y="13.6" width="7" height="7" rx="1.6"/>',
+  pdf: '<path d="M14 3.4H7.2a1.8 1.8 0 0 0-1.8 1.8v13.6a1.8 1.8 0 0 0 1.8 1.8h9.6a1.8 1.8 0 0 0 1.8-1.8V8z"/><path d="M14 3.4V8h4.6"/><path d="M8.4 12.4h2.1a1.4 1.4 0 0 1 0 2.8H8.4v-2.8zm0 2.8v2.4M13.2 12.4v5.2h1.2a2.1 2.1 0 0 0 2.1-2.1v-1a2.1 2.1 0 0 0-2.1-2.1h-1.2z"/>',
+  word: '<path d="M14 3.4H7.2a1.8 1.8 0 0 0-1.8 1.8v13.6a1.8 1.8 0 0 0 1.8 1.8h9.6a1.8 1.8 0 0 0 1.8-1.8V8z"/><path d="M14 3.4V8h4.6"/><path d="m8.2 12 1.2 5.2 1.7-3.7 1.7 3.7L14 12"/>',
+  text: '<path d="M14 3.4H7.2a1.8 1.8 0 0 0-1.8 1.8v13.6a1.8 1.8 0 0 0 1.8 1.8h9.6a1.8 1.8 0 0 0 1.8-1.8V8z"/><path d="M14 3.4V8h4.6"/><path d="M8.5 12.2h7M8.5 15.2h7M8.5 18.2h4.4"/>',
   file: '<path d="M14 3.4H7.2a1.8 1.8 0 0 0-1.8 1.8v13.6a1.8 1.8 0 0 0 1.8 1.8h9.6a1.8 1.8 0 0 0 1.8-1.8V8z"/><path d="M14 3.4V8h4.6"/>',
 };
 
@@ -45,13 +48,17 @@ const CATEGORY_META = {
   audio: { kicker: 'Аудио', title: 'Аудиофайл', icon: 'music', sub: 'выберите формат' },
   video: { kicker: 'Видео', title: 'Видеофайл', icon: 'film', sub: 'выберите формат' },
   image: { kicker: 'Изображение', title: 'Картинка', icon: 'image', sub: 'выберите формат' },
-  unknown: { kicker: 'Shift + drag', title: 'Форматы', icon: 'spark', sub: 'отпустите файл' },
+  document: { kicker: 'Документ', title: 'Документ', icon: 'file', sub: 'выберите формат' },
+  unknown: { kicker: 'drag', title: 'Форматы', icon: 'spark', sub: 'отпустите файл' },
 };
 
 const state = {
   open: false,
   mode: 'manual',
   category: 'unknown',
+  sourceExt: '',
+  trigger: 'shift',
+  theme: 'liquid',
   hot: -1,
   segs: [],
   fileName: '',
@@ -60,19 +67,27 @@ const state = {
   closeTimer: null,
 };
 
+function triggerLabel() {
+  try {
+    return window.gc.triggerLabel(state.trigger);
+  } catch (_) {
+    return 'Shift';
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* отрисовка                                                          */
 /* ------------------------------------------------------------------ */
 
-function renderItems(category) {
+function renderItems(category, sourceExt = '') {
   const set = category === 'unknown' ? 'default' : category;
-  const list = window.gc.formatsFor(set);
+  const list = window.gc.formatsFor(set, sourceExt);
   state.segs = list;
   state.hot = -1;
   itemsEl.classList.remove('has-hot');
   itemsEl.innerHTML = '';
 
-  const step = 360 / list.length;
+  const step = 360 / Math.max(1, list.length);
   list.forEach((fmt, i) => {
     const angle = -90 + i * step;
     const seg = document.createElement('div');
@@ -88,7 +103,8 @@ function renderItems(category) {
 function setCoreIdle() {
   const meta = CATEGORY_META[state.category] || CATEGORY_META.unknown;
   coreIcon.innerHTML = svg(meta.icon);
-  coreKicker.textContent = meta.kicker;
+  coreKicker.textContent =
+    state.category === 'unknown' ? `${triggerLabel()} + drag` : meta.kicker;
   coreTitle.textContent = meta.title;
   coreSub.textContent = meta.sub;
 }
@@ -184,11 +200,23 @@ function dragFiles(dt) {
   }
 }
 
+const DOCUMENT_MIME_EXT = {
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-word.document.macroenabled.12': 'docx',
+  'text/plain': 'txt',
+};
+
+function documentExtFromType(type) {
+  return DOCUMENT_MIME_EXT[String(type || '').toLowerCase()] || '';
+}
+
 function guessDragInfo(dt) {
-  if (!dt) return { category: 'unknown', name: '' };
+  if (!dt) return { category: 'unknown', name: '', ext: '' };
   const items = Array.from(dt.items || []);
   for (const item of items) {
     if (item.kind !== 'file') continue;
+    const mimeExt = documentExtFromType(item.type);
     let file = null;
     try {
       file = item.getAsFile();
@@ -196,18 +224,18 @@ function guessDragInfo(dt) {
       file = null;
     }
     if (file && file.name) {
-      return { category: window.gc.categoryFor(file.name), name: file.name };
+      return { category: window.gc.categoryFor(file.name), name: file.name, ext: mimeExt };
     }
     if (item.type) {
       const cat = window.gc.categoryFor(item.type);
-      if (cat !== 'unknown') return { category: cat, name: '' };
+      if (cat !== 'unknown') return { category: cat, name: '', ext: mimeExt };
     }
   }
   const files = dragFiles(dt);
   if (files.length && files[0].name) {
-    return { category: window.gc.categoryFor(files[0].name), name: files[0].name };
+    return { category: window.gc.categoryFor(files[0].name), name: files[0].name, ext: '' };
   }
-  return { category: 'unknown', name: '' };
+  return { category: 'unknown', name: '', ext: '' };
 }
 
 function hasFiles(dt) {
@@ -217,6 +245,26 @@ function hasFiles(dt) {
   } catch (_) {
     return false;
   }
+}
+
+function applyDragInfo(info) {
+  const previousCategory = state.category;
+  const previousExt = state.sourceExt;
+  const ext = info.ext || (info.name ? window.gc.extOf(info.name) : '');
+
+  if (info.name) state.fileName = info.name;
+  if (info.category !== 'unknown') state.category = info.category;
+  if (ext) state.sourceExt = ext;
+
+  if (
+    previousCategory !== state.category ||
+    previousExt !== state.sourceExt ||
+    !state.segs.length
+  ) {
+    renderItems(state.category, state.sourceExt);
+    setCoreIdle();
+  }
+  updateCaption();
 }
 
 /* ------------------------------------------------------------------ */
@@ -239,9 +287,13 @@ function openMenu(payload) {
   state.open = true;
   state.mode = (payload && payload.mode) || 'manual';
   state.category = 'unknown';
+  state.sourceExt = '';
   state.fileName = '';
   state.dropped = false;
   state.hot = -1;
+  state.trigger = (payload && payload.trigger) || state.trigger || 'shift';
+  state.theme = (payload && payload.theme) || state.theme || 'liquid';
+  document.body.dataset.theme = state.theme;
 
   renderBackdrop(payload && payload.backdrop);
   renderItems('unknown');
@@ -278,14 +330,7 @@ function closeMenu() {
 window.addEventListener('dragenter', (event) => {
   if (!state.open || !hasFiles(event.dataTransfer)) return;
   event.preventDefault();
-  const info = guessDragInfo(event.dataTransfer);
-  if (info.name) state.fileName = info.name;
-  if (info.category !== state.category) {
-    state.category = info.category;
-    renderItems(info.category);
-    setCoreIdle();
-  }
-  updateCaption();
+  applyDragInfo(guessDragInfo(event.dataTransfer));
 });
 
 window.addEventListener('dragover', (event) => {
@@ -294,13 +339,7 @@ window.addEventListener('dragover', (event) => {
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
   if (!hasFiles(event.dataTransfer)) return;
   if (!state.segs.length) return;
-  if (!state.fileName) {
-    const info = guessDragInfo(event.dataTransfer);
-    if (info.name) {
-      state.fileName = info.name;
-      updateCaption();
-    }
-  }
+  if (!state.fileName) applyDragInfo(guessDragInfo(event.dataTransfer));
   setHot(segmentAt(pointFromEvent(event)));
 });
 
@@ -332,11 +371,17 @@ window.addEventListener('drop', (event) => {
   const fmt = state.segs[index];
   if (!fmt) return;
 
-  const compatible = files.filter((file) => {
+  const targets = files.filter((file) => {
     const cat = window.gc.categoryFor(file.name);
-    return cat !== 'unknown';
+    const ext = window.gc.extOf(file.name);
+    return cat !== 'unknown' && ext !== fmt.ext && window.gc.isCompatible(cat, fmt.key);
   });
-  const targets = compatible.length ? compatible : files.slice(0, 1);
+
+  if (!targets.length) {
+    shake();
+    setCaption(`Для ${fmt.label} нужен другой тип файла`, false);
+    return;
+  }
 
   const paths = targets.map((file) => window.gc.getPathForFile(file)).filter(Boolean);
   if (!paths.length) {
@@ -386,7 +431,7 @@ stage.addEventListener('click', (event) => {
     const seg = event.target.closest('.seg');
     const index = state.segs.findIndex((f) => f.key === seg.dataset.key);
     const fmt = state.segs[index];
-    if (fmt) setCaption(`Перетащите файл на «${fmt.label}» или зажмите Shift во время перетаскивания`);
+    if (fmt) setCaption(`Перетащите файл на «${fmt.label}» или зажмите ${triggerLabel()} во время перетаскивания`);
     return;
   }
   closeMenu();
@@ -399,10 +444,19 @@ window.gc.onMenuClose(closeMenu);
 const PREVIEW_PARAMS = new URLSearchParams(location.search);
 if (PREVIEW) {
   document.body.classList.add('is-preview');
+  const previewTheme = PREVIEW_PARAMS.get('theme');
+  const previewTrigger = PREVIEW_PARAMS.get('trigger');
+  const previewCategory = PREVIEW_PARAMS.get('category');
+  const previewExt = PREVIEW_PARAMS.get('ext');
   const hotParam = Number(PREVIEW_PARAMS.get('hot'));
-  setTimeout(() => openMenu({ mode: 'manual' }), 80);
+  setTimeout(() => openMenu({ mode: 'manual', theme: previewTheme, trigger: previewTrigger }), 80);
+  if (previewCategory) {
+    setTimeout(() => {
+      applyDragInfo({ category: previewCategory, name: previewExt ? `preview.${previewExt}` : '' });
+    }, 350);
+  }
   if (Number.isInteger(hotParam) && hotParam >= 0) {
-    setTimeout(() => setHot(hotParam), 700);
+    setTimeout(() => setHot(hotParam), 900);
   }
   setTimeout(() => {
     const bg = getComputedStyle(document.body).backgroundImage;

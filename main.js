@@ -19,6 +19,14 @@ const {
 const { makeIconPng } = require('./src/icon');
 const { convertFile, resolveFfmpeg } = require('./src/convert');
 const { FORMATS, extOf, categoryFor, isCompatible } = require('./src/formats');
+const {
+  TRIGGER_OPTIONS,
+  THEME_OPTIONS,
+  DEFAULT_SETTINGS,
+  triggerKeys,
+  triggerLabel,
+  normalizeSettings,
+} = require('./src/preferences');
 
 const APP_ID = 'com.glassconvert.app';
 const MENU_SIZE = 600;
@@ -38,14 +46,23 @@ if (!gotLock) {
 /* ------------------------------------------------------------------ */
 
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
-const settings = { enabled: true, autoLaunch: false };
+const settings = { ...DEFAULT_SETTINGS };
 
 function loadSettings() {
   try {
-    Object.assign(settings, JSON.parse(fs.readFileSync(settingsPath, 'utf8')));
+    Object.assign(settings, normalizeSettings(JSON.parse(fs.readFileSync(settingsPath, 'utf8'))));
   } catch (_) {
     /* первый запуск */
   }
+}
+
+function publicSettings() {
+  return {
+    enabled: settings.enabled,
+    autoLaunch: settings.autoLaunch,
+    trigger: settings.trigger,
+    theme: settings.theme,
+  };
 }
 
 function saveSettings() {
@@ -58,11 +75,17 @@ function saveSettings() {
 }
 
 function applyAutoLaunch() {
+  if (!app.isPackaged) return;
   try {
-    app.setLoginItemSettings({
+    const portable = process.env.PORTABLE_EXECUTABLE_FILE;
+    const options = {
       openAtLogin: Boolean(settings.autoLaunch),
       args: ['--hidden'],
-    });
+    };
+    // Портативная сборка распаковывается во временную папку: для автозапуска
+    // нужен путь к внешнему .exe, а не к process.execPath.
+    if (portable && fs.existsSync(portable)) options.path = portable;
+    app.setLoginItemSettings(options);
   } catch (_) {
     /* ignore */
   }
@@ -75,6 +98,7 @@ function applyAutoLaunch() {
 let tray = null;
 let overlay = null;
 let toast = null;
+let settingsWin = null;
 let menuVisible = false;
 let menuMode = null;
 let menuOpening = false;
@@ -83,7 +107,7 @@ let overlayHideTimer = null;
 let overlayReady = false;
 let hookStarted = false;
 
-let shiftDown = false;
+const pressedMods = new Set();
 let lmbDown = false;
 let showTimer = null;
 let releaseHideTimer = null;
@@ -174,6 +198,82 @@ function createToast() {
   toast.on('closed', () => {
     toast = null;
   });
+}
+
+function triggerSatisfied() {
+  const keys = triggerKeys(settings.trigger);
+  return keys.length > 0 && keys.every((key) => pressedMods.has(key));
+}
+
+function createSettingsWindow() {
+  settingsWin = new BrowserWindow({
+    width: 780,
+    height: 700,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    minimizable: true,
+    maximizable: false,
+    fullscreenable: false,
+    center: true,
+    title: 'Glass Convert — Настройки',
+    icon: icon(64),
+    webPreferences: {
+      preload: path.join(__dirname, 'src', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      backgroundThrottling: false,
+    },
+  });
+
+  settingsWin.setMenuBarVisibility(false);
+  settingsWin.loadFile(path.join(__dirname, 'src', 'settings.html'));
+  settingsWin.once('ready-to-show', () => {
+    if (settingsWin) settingsWin.show();
+  });
+  settingsWin.on('closed', () => {
+    settingsWin = null;
+  });
+}
+
+function openSettings() {
+  if (!settingsWin) {
+    createSettingsWindow();
+    return;
+  }
+  if (settingsWin.isMinimized()) settingsWin.restore();
+  settingsWin.show();
+  settingsWin.focus();
+}
+
+function broadcastSettings() {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.webContents.send('settings:changed', publicSettings());
+  }
+}
+
+function updateSettings(patch) {
+  if (!patch || typeof patch !== 'object') return publicSettings();
+  const previous = publicSettings();
+
+  if (typeof patch.enabled === 'boolean') settings.enabled = patch.enabled;
+  if (typeof patch.autoLaunch === 'boolean') settings.autoLaunch = patch.autoLaunch;
+  if (TRIGGER_OPTIONS.some((item) => item.key === patch.trigger)) settings.trigger = patch.trigger;
+  if (THEME_OPTIONS.some((item) => item.key === patch.theme)) settings.theme = patch.theme;
+
+  saveSettings();
+  if (settings.autoLaunch !== previous.autoLaunch) applyAutoLaunch();
+  if (!settings.enabled) hideMenu();
+  if (settings.trigger !== previous.trigger) {
+    clearTimeout(showTimer);
+    if (menuVisible && menuMode === 'drag' && !triggerSatisfied()) hideMenu();
+  }
+  refreshTray();
+  broadcastSettings();
+  return publicSettings();
 }
 
 function menuBounds() {
@@ -294,7 +394,7 @@ async function showMenu(mode = 'manual') {
     menuOpening = false;
     return;
   }
-  if (mode === 'drag' && (!shiftDown || !lmbDown || Date.now() < suppressUntil)) {
+  if (mode === 'drag' && (!triggerSatisfied() || !lmbDown || Date.now() < suppressUntil)) {
     menuOpening = false;
     return;
   }
@@ -305,7 +405,12 @@ async function showMenu(mode = 'manual') {
   menuOpening = false;
   overlay.setIgnoreMouseEvents(false);
   overlay.showInactive();
-  overlay.webContents.send('menu:open', { mode, backdrop });
+  overlay.webContents.send('menu:open', {
+    mode,
+    backdrop,
+    theme: settings.theme,
+    trigger: settings.trigger,
+  });
 }
 
 function hideMenu(immediate = false) {
@@ -356,18 +461,27 @@ function startHook() {
 
   const SHIFT = UiohookKey.Shift ?? 42;
   const SHIFT_RIGHT = UiohookKey.ShiftRight ?? 54;
+  const CTRL = UiohookKey.Ctrl ?? 29;
+  const CTRL_RIGHT = UiohookKey.CtrlRight ?? 3613;
+  const ALT = UiohookKey.Alt ?? 56;
+  const ALT_RIGHT = UiohookKey.AltRight ?? 3640;
   const ESC = UiohookKey.Escape ?? 1;
 
-  const isShift = (code) => code === SHIFT || code === SHIFT_RIGHT;
+  const modifierFor = (code) => {
+    if (code === SHIFT || code === SHIFT_RIGHT) return 'shift';
+    if (code === CTRL || code === CTRL_RIGHT) return 'ctrl';
+    if (code === ALT || code === ALT_RIGHT) return 'alt';
+    return null;
+  };
 
   const maybeOpen = () => {
     if (!settings.enabled) return;
-    if (!shiftDown || !lmbDown) return;
+    if (!triggerSatisfied() || !lmbDown) return;
     if (menuVisible || menuOpening) return;
     if (Date.now() < suppressUntil) return;
     clearTimeout(showTimer);
     showTimer = setTimeout(() => {
-      if (settings.enabled && shiftDown && lmbDown && !menuVisible) showMenu('drag');
+      if (settings.enabled && triggerSatisfied() && lmbDown && !menuVisible) showMenu('drag');
     }, SHOW_DELAY);
   };
 
@@ -376,20 +490,21 @@ function startHook() {
       hideMenu();
       return;
     }
-    if (isShift(event.keycode)) {
-      if (shiftDown) return;
-      shiftDown = true;
+    const modifier = modifierFor(event.keycode);
+    if (modifier && !pressedMods.has(modifier)) {
+      pressedMods.add(modifier);
       maybeOpen();
     }
   });
 
   uIOhook.on('keyup', (event) => {
-    if (isShift(event.keycode)) {
-      shiftDown = false;
-      clearTimeout(showTimer);
-      if (menuOpening) hideMenu();
-      else if (menuVisible && menuMode === 'drag') hideMenuSoon(160);
-    }
+    const modifier = modifierFor(event.keycode);
+    if (!modifier) return;
+    pressedMods.delete(modifier);
+    if (!triggerKeys(settings.trigger).includes(modifier)) return;
+    clearTimeout(showTimer);
+    if (menuOpening) hideMenu();
+    else if (menuVisible && menuMode === 'drag') hideMenuSoon(160);
   });
 
   uIOhook.on('mousedown', (event) => {
@@ -505,6 +620,7 @@ async function processQueue() {
   const srcExt = (extOf(job.filePath) || 'file').toUpperCase();
   const baseName = path.basename(job.filePath);
   const queued = queue.length;
+  const engine = categoryFor(job.filePath) === 'document' ? 'DOC' : 'FFMPEG';
 
   showToast(
     {
@@ -512,6 +628,7 @@ async function processQueue() {
       title: `${srcExt} → ${target.label}`,
       subtitle: queued > 0 ? `${baseName} · ещё ${queued} в очереди` : baseName,
       progress: 0,
+      engine,
     },
     0
   );
@@ -530,6 +647,7 @@ async function processQueue() {
             title: `${srcExt} → ${target.label}`,
             subtitle: queued > 0 ? `${baseName} · ещё ${queued} в очереди` : baseName,
             progress: p,
+            engine,
           },
           0
         );
@@ -580,6 +698,7 @@ async function processQueue() {
 /* ------------------------------------------------------------------ */
 
 function buildTrayMenu() {
+  const label = triggerLabel(settings.trigger);
   return Menu.buildFromTemplate([
     {
       label: settings.enabled ? 'Glass Convert · активен' : 'Glass Convert · пауза',
@@ -592,6 +711,16 @@ function buildTrayMenu() {
       click: () => showMenu('manual'),
     },
     {
+      label: 'Настройки…',
+      accelerator: 'Control+,',
+      click: () => openSettings(),
+    },
+    {
+      label: `Активация: ${label} + перетаскивание`,
+      click: () => openSettings(),
+    },
+    { type: 'separator' },
+    {
       label: 'Включено',
       type: 'checkbox',
       checked: settings.enabled,
@@ -600,6 +729,7 @@ function buildTrayMenu() {
         saveSettings();
         if (!settings.enabled) hideMenu();
         refreshTray();
+        broadcastSettings();
       },
     },
     {
@@ -611,6 +741,7 @@ function buildTrayMenu() {
         applyAutoLaunch();
         saveSettings();
         refreshTray();
+        broadcastSettings();
       },
     },
     { type: 'separator' },
@@ -620,8 +751,8 @@ function buildTrayMenu() {
         showToast(
           {
             status: 'info',
-            title: 'Зажмите Shift во время перетаскивания',
-            subtitle: 'Отпустите файл на нужный формат — готовый файл появится рядом',
+            title: `Зажмите ${label} во время перетаскивания`,
+            subtitle: 'Аудио, видео, фото, PDF и Word — готовый файл появится рядом',
             progress: null,
           },
           9000
@@ -636,7 +767,9 @@ function buildTrayMenu() {
 function refreshTray() {
   if (!tray) return;
   tray.setToolTip(
-    settings.enabled ? 'Glass Convert · Shift + перетаскивание' : 'Glass Convert · на паузе'
+    settings.enabled
+      ? `Glass Convert · ${triggerLabel(settings.trigger)} + перетаскивание`
+      : 'Glass Convert · на паузе'
   );
   tray.setContextMenu(buildTrayMenu());
 }
@@ -657,6 +790,12 @@ function createTray() {
 /* ------------------------------------------------------------------ */
 
 function registerIpc() {
+  ipcMain.handle('settings:get', () => publicSettings());
+  ipcMain.handle('settings:update', (_event, patch) => updateSettings(patch));
+  ipcMain.on('settings:close', () => {
+    if (settingsWin) settingsWin.close();
+  });
+
   ipcMain.on('convert:start', (_event, payload) => {
     if (!payload || typeof payload !== 'object') return;
     suppressUntil = Date.now() + 900;
@@ -692,7 +831,11 @@ function registerIpc() {
 /* запуск                                                             */
 /* ------------------------------------------------------------------ */
 
-app.on('second-instance', () => {
+app.on('second-instance', (_event, commandLine) => {
+  if (Array.isArray(commandLine) && commandLine.includes('--settings')) {
+    openSettings();
+    return;
+  }
   showMenu('manual');
 });
 
@@ -711,6 +854,8 @@ app.whenReady().then(() => {
   } catch (_) {
     /* ignore */
   }
+
+  if (process.argv.includes('--settings')) openSettings();
 
   app.on('activate', () => {
     if (!overlay) createOverlay();

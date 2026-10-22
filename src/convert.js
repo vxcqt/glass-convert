@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { categoryFor, extOf, isCompatible, FORMATS } = require('./formats');
+const { convertDocument } = require('./convert-docs');
 
 let cachedFfmpeg = null;
 
@@ -137,6 +138,22 @@ function convertFile({ input, targetKey, onProgress = () => {} }) {
       return;
     }
 
+    const output = uniqueOutputPath(input, target.ext);
+
+    if (sourceCategory === 'document') {
+      convertDocument({ input, targetKey, output, onProgress })
+        .then(() => resolve({ output, duration: 0 }))
+        .catch((err) => {
+          try {
+            if (fs.existsSync(output)) fs.unlinkSync(output);
+          } catch (_) {
+            /* ignore */
+          }
+          reject(err);
+        });
+      return;
+    }
+
     let ffmpeg;
     try {
       ffmpeg = resolveFfmpeg();
@@ -145,7 +162,6 @@ function convertFile({ input, targetKey, onProgress = () => {} }) {
       return;
     }
 
-    const output = uniqueOutputPath(input, target.ext);
     const args = buildArgs(input, output, targetKey, sourceCategory);
     const child = spawn(ffmpeg, args, { windowsHide: true });
     let stderr = '';

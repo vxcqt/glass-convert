@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'" />
+    <title>Glass Convert — Настройки</title>
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <div class="app">
+      <span class="orb orb-a"></span>
+      <span class="orb orb-b"></span>
+      <span class="orb orb-c"></span>
+
+      <header class="titlebar">
+        <div class="brand">
+          <span class="logo" aria-hidden="true">
+            <svg viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="18" />
+              <circle cx="24" cy="24" r="10.5" />
+              <circle cx="24" cy="24" r="4" />
+              <path d="M24 6v6M24 36v6M6 24h6M36 24h6" />
+            </svg>
+          </span>
+          <span class="brand-text">
+            <strong>Glass Convert</strong>
+            <small>Настройки</small>
+          </span>
+        </div>
+        <button class="icon-btn" id="close" type="button" aria-label="Закрыть">
+          <svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+
+      <main>
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Клавиша активации</h2>
+              <p>Зажмите её, удерживая файл при перетаскивании.</p>
+            </div>
+            <span class="badge" id="triggerBadge">Shift</span>
+          </div>
+          <div class="keys" id="keys"></div>
+          <p class="note" id="triggerNote"></p>
+        </section>
+
+        <section class="section themes-section">
+          <div class="section-head">
+            <div>
+              <h2>Дизайн меню</h2>
+              <p>Стиль применяется к следующему открытию меню.</p>
+            </div>
+            <span class="badge soft" id="themeBadge">Liquid Glass</span>
+          </div>
+          <div class="themes" id="themes"></div>
+        </section>
+
+        <div class="toggle-row">
+          <div class="toggle-copy">
+            <strong>Запускать при входе</strong>
+            <span>Приложение будет тихо ждать в трее после запуска Windows</span>
+          </div>
+          <button class="switch" id="autoLaunch" type="button" role="switch" aria-checked="false">
+            <span></span>
+          </button>
+        </div>
+      </main>
+
+      <footer>
+        <span class="save-hint"><i></i> Изменения сохраняются сразу</span>
+        <button class="done" id="done" type="button">Готово</button>
+      </footer>
+    </div>
+    <script src="settings.js"></script>
+  </body>
+</html>
